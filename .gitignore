@@ -1,5 +1,9 @@
+# Environment variables
+.env
+
 # Models
 *.pt
+...
 
 # Images
 *.png
