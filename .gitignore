@@ -1,0 +1,11 @@
+# Models
+*.pt
+
+# Images
+*.png
+*.jpeg
+*.avif
+*.webp
+
+.venv/
+__pycache__/

@@ -1,0 +1,15 @@
+[project]
+name = "watchdog"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "loguru>=0.7.3",
+    "opencv-python>=4.13.0.92",
+    "plyer>=2.1.0",
+    "pyhik>=0.4.3",
+    "pyobjus>=1.2.4",
+    "python-dotenv>=1.2.2",
+    "ultralytics>=8.4.48",
+]
