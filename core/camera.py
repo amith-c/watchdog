@@ -1,6 +1,7 @@
 import cv2
 import threading
 import os
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,7 +15,7 @@ except ImportError:
     from alerts import Notifier
 
 class CameraStream:
-    def __init__(self, camera_id: int, url: str, detector: ObjectDetector = None, notifier: Notifier = None):
+    def __init__(self, camera_id: int, url: str, detector: ObjectDetector = None, notifier: Notifier = None, cooldown: int = 300):
         self.stream = cv2.VideoCapture(url)
         if not self.stream.isOpened():
             print(f"Error: Could not open stream for Cam {camera_id}")
@@ -26,6 +27,10 @@ class CameraStream:
         self.detector = detector
         self.notifier = notifier
         self.lock = threading.Lock()
+        
+        # Cooldown management
+        self.alert_cooldown = cooldown
+        self.last_alert_times = {} # Track last alert time per label
 
         self.thread = threading.Thread(target=self.update, args=(), daemon=True)
         self.thread.start()
@@ -45,15 +50,21 @@ class CameraStream:
             # Run detection every ~100 frames
             if i % 100 == 0 and self.detector:
                 detections = self.detector.detect(frame)
+                now = time.time()
                 for label, confidence in detections:
                     if confidence > 0.65:
-                        print(f"Detected: {label} ({confidence:.2f}) in Cam {self.id}")
-                        # Alert for specific objects
-                        if self.notifier:
-                            if label == "person":
-                                self.notifier.notify("Person detected", f"A person has been detected on Camera {self.id}")
-                            elif label == "car":
-                                self.notifier.notify("Car detected", f"A car has been detected on Camera {self.id}")
+                        # Check cooldown for this specific label
+                        last_alert = self.last_alert_times.get(label, 0)
+                        if now - last_alert > self.alert_cooldown:
+                            print(f"Detected: {label} ({confidence:.2f}) in Cam {self.id}")
+                            # Alert for specific objects
+                            if self.notifier:
+                                if label == "person":
+                                    self.notifier.notify("Person detected", f"A person has been detected on Camera {self.id}")
+                                    self.last_alert_times[label] = now
+                                elif label == "car":
+                                    self.notifier.notify("Car detected", f"A car has been detected on Camera {self.id}")
+                                    self.last_alert_times[label] = now
             i += 1 
 
     def get_frame(self):
@@ -81,6 +92,7 @@ class CameraStreamManager:
         self.port = os.getenv("RTSP_PORT", "554")
         self.user = os.getenv("USERNAME")
         self.pwd = os.getenv("PASSWORD")
+        self.cooldown = int(os.getenv("ALERT_COOLDOWN", 300))
 
     def _get_url(self, stream_id: int) -> str:
         return f"rtsp://{self.user}:{self.pwd}@{self.ip}:{self.port}/Streaming/Channels/{stream_id}"
@@ -89,7 +101,7 @@ class CameraStreamManager:
         for cid in self.camera_ids:
             stream_id = cid * 100 + (2 if self.is_low_res else 1)
             url = self._get_url(stream_id)
-            self.streams[cid] = CameraStream(cid, url, self.detector, self.notifier)
+            self.streams[cid] = CameraStream(cid, url, self.detector, self.notifier, cooldown=self.cooldown)
 
     def get_frame(self, camera_id: int):
         if camera_id in self.streams:
